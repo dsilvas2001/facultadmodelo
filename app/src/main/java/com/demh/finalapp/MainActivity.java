@@ -1,9 +1,5 @@
 package com.demh.finalapp;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
-import androidx.appcompat.app.AppCompatActivity;
-
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
@@ -23,16 +19,13 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.demh.finalapp.ml.FacultadCurso;
-import com.demh.finalapp.ml.ModeloFacultad;
-import com.demh.finalapp.ml.ModeloMascota;
+import com.demh.finalapp.ml.ModeloFacultadIngenierias;
 import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.Text;
-import com.google.mlkit.vision.text.TextRecognition;
-import com.google.mlkit.vision.text.TextRecognizer;
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import org.tensorflow.lite.support.image.TensorImage;
 import org.tensorflow.lite.support.label.Category;
@@ -41,7 +34,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity  implements  OnFailureListener,
         ImageReader.OnImageAvailableListener {
@@ -171,7 +166,6 @@ public class MainActivity extends AppCompatActivity  implements  OnFailureListen
                     mSelectedImage = MediaStore.Images.Media.getBitmap(getContentResolver(), data.getData());
 
                 mImageView.setImageBitmap(mSelectedImage);
-                PersonalizedModel(null);
 
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -179,33 +173,6 @@ public class MainActivity extends AppCompatActivity  implements  OnFailureListen
         }
     }
 
-    public void PersonalizedModel(View v) {
-        try {
-            String res="";
-            ModeloMascota model = ModeloMascota.newInstance(getApplicationContext());
-            TensorImage image = TensorImage.fromBitmap(mSelectedImage);
-            ModeloMascota.Outputs outputs = model.process(image);
-            List<Category> probability = outputs.getProbabilityAsCategoryList();
-            Collections.sort(probability, new CategoryComparator());
-
-
-            String obtenerlista = probability.get(0).getLabel();
-            double probabilidadlista = probability.get(0).getScore();
-
-
-            for (int i = 0; i < probability.size(); i++) {
-                Category category = probability.get(i);
-                if (category.getScore() > probabilidadlista) {
-                    obtenerlista = category.getLabel();
-                    probabilidadlista = category.getScore();
-                }
-            }
-            txtResults.setText(res = obtenerlista);
-            model.close();
-        } catch (IOException e) {
-            txtResults.setText("Error al procesar Modelo");
-        }
-    }
 
 
 
@@ -259,40 +226,32 @@ public class MainActivity extends AppCompatActivity  implements  OnFailureListen
         }
 
     }
-    private void processImage() {
-        String res = "";
-        imageConverter.run();
 
-        rgbFrameBitmap = Bitmap.createBitmap(previewWidth, previewHeight, Bitmap.Config.ARGB_8888);
+    private void processImage() {
+        imageConverter.run();
+        Bitmap rgbFrameBitmap = Bitmap.createBitmap(previewWidth, previewHeight, Bitmap.Config.ARGB_8888);
         rgbFrameBitmap.setPixels(rgbBytes, 0, previewWidth, 0, 0, previewWidth, previewHeight);
 
         try {
-            FacultadCurso model = FacultadCurso.newInstance(getApplicationContext());
+            ModeloFacultadIngenierias model = ModeloFacultadIngenierias.newInstance(getApplicationContext());
             TensorImage image = TensorImage.fromBitmap(rgbFrameBitmap);
+            ModeloFacultadIngenierias.Outputs outputs = model.process(image);
 
-            FacultadCurso.Outputs outputs = model.process(image);
-            List<Category> probability = outputs.getProbabilityAsCategoryList();
-            Collections.sort(probability, new CategoryComparator());
-            String obtenerlista = probability.get(0).getLabel();
-            double probabilidadlista = probability.get(0).getScore();
-
-
-            for (int i = 0; i < probability.size(); i++) {
-                Category category = probability.get(i);
-                if (category.getScore() > probabilidadlista) {
-                    obtenerlista = category.getLabel();
-                    probabilidadlista = category.getScore();
-                }
+            Map<String, Float> probabilityMap = new HashMap<>();
+            for (Category category : outputs.getProbabilityAsCategoryList()) {
+                probabilityMap.put(category.getLabel(), category.getScore());
             }
-            txtResults.setText(res = obtenerlista);
-            model.close();
+            String obtenerlista = Collections.max(probabilityMap.entrySet(), Map.Entry.comparingByValue()).getKey();
 
+            txtResults.setText(obtenerlista);
+            model.close();
         } catch (IOException e) {
             txtResults.setText("Error al procesar Modelo");
         }
 
         postInferenceCallback.run();
     }
+
 
 
     protected void fillBytes(final Image.Plane[] planes, final byte[][] yuvBytes) {
